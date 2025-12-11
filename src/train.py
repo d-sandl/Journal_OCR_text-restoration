@@ -2,7 +2,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, random_split
 import torchvision.transforms as transforms
 from PIL import Image
 import itertools
@@ -19,12 +19,12 @@ class Config:
     beta1 = 0.5  # Adam beta1 for GAN stability
     lambda_l1 = 100  # Weight for L1 reconstruction loss
     num_epochs = 200
-    data_dir = 'data'  # Root folder with 'broken/' and 'clean/' subdirs
-    checkpoint_dir = 'checkpoints'
-    sample_dir = 'samples'  # For saving test outputs
-    broken_dir = 'data/broken'  # Broken text images
-    clean_dir = 'data/clean'    # Clean text images
-    restored_dir = 'restored'  # Output folder for restored images
+    data_dir = '../data'  # Root folder with 'broken/' and 'clean/' subdirs
+    checkpoint_dir = '../checkpoints'
+    sample_dir = '../samples'  # For saving test outputs
+    broken_dir = '../data/broken'  # Broken text images
+    clean_dir = '../data/clean'    # Clean text images
+    restored_dir = '../restored'  # Output folder for restored images
 
 config = Config()               # create config instance
 
@@ -80,22 +80,38 @@ transform = transforms.Compose([
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
-# Load datasets (80/20 train/val split; adjust as needed)
-all_files = sorted(os.listdir(os.path.join(config.data_dir, 'broken')))
-split_idx = int(0.8 * len(all_files))
-train_dataset = DocumentDataset(
-    os.path.join(config.data_dir, 'broken'),
-    os.path.join(config.data_dir, 'clean'),
-    transform=transform
-)[:split_idx]  # Manual split; use torch.utils.data.Subset for proper indexing
-val_dataset = DocumentDataset(
-    os.path.join(config.data_dir, 'broken'),
-    os.path.join(config.data_dir, 'clean'),
-    transform=transform
-)[split_idx:]
+# # Load datasets (80/20 train/val split; adjust as needed)
+# all_files = sorted(os.listdir(os.path.join(config.data_dir, 'broken')))
+# split_idx = int(0.8 * len(all_files))
+# train_dataset = DocumentDataset(
+#     os.path.join(config.data_dir, 'broken'),
+#     os.path.join(config.data_dir, 'clean'),
+#     transform=transform
+# )[:split_idx]  # Manual split; use torch.utils.data.Subset for proper indexing
+# val_dataset = DocumentDataset(
+#     os.path.join(config.data_dir, 'broken'),
+#     os.path.join(config.data_dir, 'clean'),
+#     transform=transform
+# )[split_idx:]
 
-train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, num_workers=4)
-val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4)
+# train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, num_workers=4)
+# val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4)
+
+# Load datasets (80/20 train/val split; adjust as needed)
+full_dataset = DocumentDataset(
+    config.broken_dir,
+    config.clean_dir,
+    transform=transform
+)
+
+train_size = int(0.8 * len(full_dataset))
+val_size = len(full_dataset) - train_size
+train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+
+train_loader = DataLoader(train_dataset, batch_size=config.batch_size,
+                          shuffle=True, num_workers=4, pin_memory=True)
+val_loader   = DataLoader(val_dataset,   batch_size=config.batch_size,
+                          shuffle=False, num_workers=4, pin_memory=True)
 
 # Step 3: Generator - U-Net architecture for broken -> clean mapping
 class UNetGenerator(nn.Module):

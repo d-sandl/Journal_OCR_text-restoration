@@ -10,7 +10,7 @@ PROJ_PATH=~/text-restoration
 source $PROJ_PATH/venv/bin/activate
 
 # Run the Python script
-python synthetic_atm_sans-serif.py
+python ~/text-restoration/dataset-preparing/synthetic_atm_sans-serif.py
 
 # Deactivate venv
 deactivate
