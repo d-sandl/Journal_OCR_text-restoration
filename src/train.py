@@ -115,74 +115,71 @@ val_loader   = DataLoader(val_dataset,   batch_size=config.batch_size,
 
 # Step 3: Generator - U-Net architecture for broken -> clean mapping
 class UNetGenerator(nn.Module):
-    def __init__(self, input_nc=3, output_nc=3, num_downs=8):
+    def __init__(self, in_channels=3, out_channels=3):
         super(UNetGenerator, self).__init__()
-        # Initial conv layer
-        self.fc = nn.Sequential(
-            nn.Conv2d(input_nc, 64, 7, padding=3, padding_mode='reflect'),
-            nn.InstanceNorm2d(64),
-            nn.ReLU(inplace=True)
-        )
-        
-        # Downsampling layers
-        self.down = nn.ModuleList()
-        curr_dim = 64
-        for i in range(num_downs):
-            self.down.append(nn.Sequential(
-                nn.Conv2d(curr_dim, curr_dim * 2, 3, stride=2, padding=1),
-                nn.InstanceNorm2d(curr_dim * 2),
+
+        def down_block(in_c, out_c):
+            return nn.Sequential(
+                nn.Conv2d(in_c, out_c, 4, stride=2, padding=1, bias=False),
+                nn.BatchNorm2d(out_c),
+                nn.LeakyReLU(0.2, inplace=True)
+            )
+
+        def up_block(in_c, out_c, dropout=False):
+            layers = [
+                nn.ConvTranspose2d(in_c, out_c, 4, stride=2, padding=1, bias=False),
+                nn.BatchNorm2d(out_c),
                 nn.ReLU(inplace=True)
-            ))
-            curr_dim *= 2
-        
-        # Bottleneck
-        self.bottleneck = nn.Sequential(
-            nn.Conv2d(curr_dim, curr_dim * 2, 3, padding=1),
-            nn.InstanceNorm2d(curr_dim * 2),
-            nn.ReLU(inplace=True)
-        )
-        curr_dim *= 2
-        
-        # Upsampling layers with skip connections
-        self.up = nn.ModuleList()
-        for i in range(num_downs - 1, -1, -1):
-            self.up.append(nn.Sequential(
-                nn.ConvTranspose2d(curr_dim, curr_dim // 2, 3, stride=2, padding=1, output_padding=1),
-                nn.InstanceNorm2d(curr_dim // 2),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(curr_dim // 2, curr_dim // 2, 3, padding=1),
-                nn.InstanceNorm2d(curr_dim // 2),
-                nn.ReLU(inplace=True)
-            ))
-            curr_dim //= 2
-        
-        # Final output layer
-        self.final = nn.Sequential(
-            nn.ConvTranspose2d(curr_dim, curr_dim, 3, stride=2, padding=1, output_padding=1),
-            nn.InstanceNorm2d(curr_dim),
-            nn.ReLU(inplace=True),
-            nn.ReflectionPad2d(3),
-            nn.Conv2d(curr_dim, output_nc, 7),
-            nn.Tanh()  # Output to [-1, 1]
-        )
+            ]
+            if dropout:
+                layers += [nn.Dropout(0.5)]
+            return nn.Sequential(*layers)
+
+        # Encoder
+        # Input size
+        self.down1 = down_block(in_channels, 64)      # 256 → 128
+        self.down2 = down_block(64, 128)              # 128 → 64
+        self.down3 = down_block(128, 256)             # 64  → 32
+        self.down4 = down_block(256, 512)             # 32  → 16
+        self.down5 = down_block(512, 512)             # 16  → 8
+        self.down6 = down_block(512, 512)             # 8   → 4
+        self.down7 = down_block(512, 512)             # 4   → 2
+        self.down8 = down_block(512, 512)             # 2   → 1
+
+        # Decoder with skip connections
+        self.up1 = up_block(512, 512, dropout=True)
+        self.up2 = up_block(1024, 512, dropout=True)
+        self.up3 = up_block(1024, 512, dropout=True)
+        self.up4 = up_block(1024, 512)
+        self.up5 = up_block(1024, 256)
+        self.up6 = up_block(512, 128)
+        self.up7 = up_block(256, 64)
+
+        self.final = nn.ConvTranspose2d(128, out_channels, 4, stride=2, padding=1)
+        self.tanh = nn.Tanh()
 
     def forward(self, x):
-        # x: [B, 3, 256, 256] (broken only; clean is target)
-        x_broken = x[:, :, :, :config.img_size]  # Split input: first half is broken
-        skips = []
-        out = self.fc(x_broken)
-        for down in self.down:
-            out = down(out)
-            skips.append(out)
-        
-        out = self.bottleneck(out)
-        skips = skips[::-1]  # Reverse for upsampling
-        
-        for i, up in enumerate(self.up):
-            out = up(out)
-            out = torch.cat([out, skips[i]], dim=1)  # Skip connection
-        
-        return self.final(out)
+        # Encoder
+        d1 = self.down1(x)
+        d2 = self.down2(d1)
+        d3 = self.down3(d2)
+        d4 = self.down4(d3)
+        d5 = self.down5(d4)
+        d6 = self.down6(d5)
+        d7 = self.down7(d6)
+        d8 = self.down8(d7)
+
+        # Decoder with skips
+        u1 = self.up1(d8)
+        u2 = self.up2(torch.cat([u1, d7], dim=1))
+        u3 = self.up3(torch.cat([u2, d6], dim=1))
+        u4 = self.up4(torch.cat([u3, d5], dim=1))
+        u5 = self.up5(torch.cat([u4, d4], dim=1))
+        u6 = self.up6(torch.cat([u5, d3], dim=1))
+        u7 = self.up7(torch.cat([u6, d2], dim=1))
+
+        out = self.final(torch.cat([u7, d1], dim=1))
+        return self.tanh(out)
 
 # Step 4: Discriminator - PatchGAN (70x70 receptive field)
 class PatchGANDiscriminator(nn.Module):
@@ -281,7 +278,8 @@ for epoch in range(config.num_epochs):
                     real_broken = batch['input'][:, :, :, :config.img_size].to(config.device)
                     fake_clean = generator(real_broken)
                     # Denormalize and save (simplified; use torchvision.utils.save_image)
-                    utils.save_image(fake_clean * 0.5 + 0.5, os.path.join(config.sample_dir, f'sample_epoch_{epoch+1}.png'), nrow=4)
+                    # utils.save_image(fake_clean * 0.5 + 0.5, os.path.join(config.sample_dir, f'sample_epoch_{epoch+1}.png'), nrow=4)
+                    torchvision.utils.save_image(fake_clean * 0.5 + 0.5, os.path.join(config.sample_dir, f'sample_epoch_{epoch+1}.png'), nrow=4, padding=2, normalize=False)
                     break
 
 print('Training complete! Checkpoints in', config.checkpoint_dir)
