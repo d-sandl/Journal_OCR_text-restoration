@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# how to use: bash run_synthetic.sh ./raw/good_sans-serif_1st
+# Example: bash run_synthetic.sh ./raw/good_sans-serif_1st
+
 # Exit immediately if a command fails
 set -e
 
@@ -10,7 +13,7 @@ PROJ_PATH=~/text-restoration
 source $PROJ_PATH/venv/bin/activate
 
 # Run the Python script
-python ~/text-restoration/dataset-preparing/synthetic_atm_sans-serif.py
+python ~/text-restoration/dataset-preparing/synthetic.py $1
 
 # Deactivate venv
 deactivate

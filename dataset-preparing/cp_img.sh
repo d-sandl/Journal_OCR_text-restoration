@@ -6,19 +6,30 @@
 # Exit immediately if a command fails
 set -e
 
-TODAY=$(date +%Y%m%d)
+# Check number of arguments
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <dataset-preparing/train/dataset_name>
+    echo "Examples: bash cp_img.sh sans-serif_1st
+    exit 1
+fi
 
 # Path to your virtual environment
-BROKEN_SRC_PATH=~/text-restoration/dataset-preparing/$TODAY/broken_$TODAY
-CLEAN_SRC_PATH=~/text-restoration/dataset-preparing/$TODAY/clean_$TODAY
+BROKEN_SRC_PATH=~/text-restoration/dataset-preparing/train/$1/broken
+CLEAN_SRC_PATH=~/text-restoration/dataset-preparing/train/$1/clean
 
 BROKEN_TGT_PATH=~/text-restoration/data/broken
 CLEAN_TGT_PATH=~/text-restoration/data/clean
 
-echo ">>> Clearing old target directories: [$BROKEN_TGT_PATH]"
-echo ">>> Clearing old target directories: [$CLEAN_TGT_PATH]"
-rm -rf "$BROKEN_TGT_PATH"/*
-rm -rf "$CLEAN_TGT_PATH"/*
+# Ask user before clearing
+read -p "Do you want to clear target (data) folders first? (y/n): " ans
+if [[ "$ans" == "y" || "$ans" == "Y" ]]; then
+    echo ">>> Clearing old target directories: [$BROKEN_TGT_PATH]"
+    echo ">>> Clearing old target directories: [$CLEAN_TGT_PATH]"
+    rm -rf "$BROKEN_TGT_PATH"/*
+    rm -rf "$CLEAN_TGT_PATH"/*
+else
+    echo ">>> Skipping clear step"
+fi
 
 echo ">>> Copying from [$BROKEN_SRC_PATH] to [$BROKEN_TGT_PATH]"
 echo ">>> Copying from [$CLEAN_SRC_PATH] to [$CLEAN_TGT_PATH]"
