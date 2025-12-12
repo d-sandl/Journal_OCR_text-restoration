@@ -291,7 +291,7 @@ for epoch in range(config.num_epochs):
         with torch.no_grad():
             for i, batch in enumerate(val_loader):
                 if i == 0:
-                    real_broken = batch['input'][:, :, :, :config.img_size].to(config.device)
+                    real_broken = batch['broken'].to(config.device)
                     fake_clean = generator(real_broken)
                     # Denormalize and save (simplified; use torchvision.utils.save_image)
                     # utils.save_image(fake_clean * 0.5 + 0.5, os.path.join(config.sample_dir, f'sample_epoch_{epoch+1}.png'), nrow=4)
