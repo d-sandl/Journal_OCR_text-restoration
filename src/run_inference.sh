@@ -10,7 +10,7 @@ PROJ_PATH=~/text-restoration
 source $PROJ_PATH/venv/bin/activate
 
 # Run the Python script
-python ~/text-restoration/src/train.py
+python ~/text-restoration/src/inference.py
 
 # Deactivate venv
 deactivate

@@ -226,108 +226,143 @@ class PatchGANDiscriminator(nn.Module):
         x = torch.cat([x_broken, x_real_or_fake], dim=1)
         return self.model(x)
 
-# Instantiate models
-generator = UNetGenerator().to(config.device)
-discriminator = PatchGANDiscriminator().to(config.device)
 
-# Losses
-criterion_gan = nn.MSELoss()  # For discriminator (real/fake)
-criterion_l1 = nn.L1Loss()    # Reconstruction loss
+# ==================== MAIN TRAINING LOOP ====================
+if __name__ == "__main__":
+    # 1. Instantiate models
+    generator = UNetGenerator().to(config.device)
+    discriminator = PatchGANDiscriminator().to(config.device)
 
-# Optimizers
-optimizer_g = optim.Adam(generator.parameters(), lr=config.lr, betas=(config.beta1, 0.999))
-optimizer_d = optim.Adam(discriminator.parameters(), lr=config.lr, betas=(config.beta1, 0.999))
+    # 2. Losses
+    criterion_gan = nn.MSELoss()
+    criterion_l1 = nn.L1Loss()
 
-# Step 5: Training Loop
-def train_epoch():
-    generator.train()
-    discriminator.train()
-    total_loss_g = 0
-    total_loss_d = 0
-    
-    for batch in tqdm(train_loader, desc='Train'):
-        real_broken = batch['broken'].to(config.device)
-        real_clean = batch['clean'].to(config.device)
-        
-        # Train Discriminator
-        optimizer_d.zero_grad()
-        # Real: broken + real_clean
-        pred_real = discriminator(real_broken, real_clean)
-        loss_d_real = criterion_gan(pred_real, torch.ones_like(pred_real))
-        
-        # Fake: broken + generated
-        fake_clean = generator(real_broken)
-        pred_fake = discriminator(real_broken.detach(), fake_clean.detach())
-        loss_d_fake = criterion_gan(pred_fake, torch.zeros_like(pred_fake))
-        
-        loss_d = (loss_d_real + loss_d_fake) / 2
-        loss_d.backward()
-        optimizer_d.step()
-        total_loss_d += loss_d.item()
-        
-        # Train Generator
-        optimizer_g.zero_grad()
-        pred_fake = discriminator(real_broken, fake_clean)
-        loss_g_gan = criterion_gan(pred_fake, torch.ones_like(pred_fake))
-        loss_g_l1 = criterion_l1(fake_clean, real_clean) * config.lambda_l1
-        loss_g = loss_g_gan + loss_g_l1
-        loss_g.backward()
-        optimizer_g.step()
-        total_loss_g += loss_g.item()
-    
-    return total_loss_g / len(train_loader), total_loss_d / len(train_loader)
+    # 3. Optimizers
+    optimizer_g = optim.Adam(generator.parameters(), lr=config.lr, betas=(config.beta1, 0.999))
+    optimizer_d = optim.Adam(discriminator.parameters(), lr=config.lr, betas=(config.beta1, 0.999))
 
-# Main training
-for epoch in range(config.num_epochs):
-    loss_g, loss_d = train_epoch()
-    print(f'Epoch [{epoch+1}/{config.num_epochs}] Loss_G: {loss_g:.4f}, Loss_D: {loss_d:.4f}')
-    
-    # Save checkpoint every 10 epochs
-    if (epoch + 1) % 10 == 0:
-        torch.save({'generator': generator.state_dict(), 'discriminator': discriminator.state_dict()}, 
-                   os.path.join(config.checkpoint_dir, f'pix2pix_epoch_{epoch+1}.pth'))
-    
-    # Sample validation (save one batch)
-    if (epoch + 1) % 10 == 0:
+    # 4. EARLY STOPPING VARIABLES (with epoch in filename)
+    best_val_loss = float('inf')
+    patience = 20
+    wait = 0
+    best_epoch = 0
+    # Filename will include epoch and val loss → e.g., BEST_generator_epoch085_loss2.74.pth
+    best_model_path = os.path.join(config.checkpoint_dir, "BEST_generator.pth")  # temporary placeholder
+
+    # 5. Define train_epoch function
+    def train_epoch():
+        generator.train()
+        discriminator.train()
+        total_loss_g = 0
+        total_loss_d = 0
+        
+        for batch in tqdm(train_loader, desc='Train'):
+            real_broken = batch['broken'].to(config.device)
+            real_clean  = batch['clean'].to(config.device)
+            
+            # --- Discriminator ---
+            optimizer_d.zero_grad()
+            pred_real = discriminator(real_broken, real_clean)
+            loss_d_real = criterion_gan(pred_real, torch.ones_like(pred_real))
+            
+            fake_clean = generator(real_broken)
+            pred_fake = discriminator(real_broken.detach(), fake_clean.detach())
+            loss_d_fake = criterion_gan(pred_fake, torch.zeros_like(pred_fake))
+            
+            loss_d = (loss_d_real + loss_d_fake) / 2
+            loss_d.backward()
+            optimizer_d.step()
+
+            # --- Generator ---
+            optimizer_g.zero_grad()
+            pred_fake = discriminator(real_broken, fake_clean)
+            loss_g_gan = criterion_gan(pred_fake, torch.ones_like(pred_fake))
+            loss_g_l1 = criterion_l1(fake_clean, real_clean) * config.lambda_l1
+            loss_g = loss_g_gan + loss_g_l1
+            loss_g.backward()
+            optimizer_g.step()
+
+            total_loss_g += loss_g.item()
+            total_loss_d += loss_d.item()
+        
+        return total_loss_g / len(train_loader), total_loss_d / len(train_loader)
+
+    # 6. FINAL TRAINING LOOP WITH EARLY STOPPING
+    for epoch in range(config.num_epochs):
+        loss_g, loss_d = train_epoch()
+        print(f'Epoch [{epoch+1}/{config.num_epochs}] Loss_G: {loss_g:.4f}, Loss_D: {loss_d:.4f}')
+        
+        # Validation loss
+        generator.eval()
+        val_loss_g = 0.0
         with torch.no_grad():
-            for i, batch in enumerate(val_loader):
-                if i == 0:
-                    real_broken = batch['broken'].to(config.device)
-                    fake_clean = generator(real_broken)
-                    # Denormalize and save (simplified; use torchvision.utils.save_image)
-                    # utils.save_image(fake_clean * 0.5 + 0.5, os.path.join(config.sample_dir, f'sample_epoch_{epoch+1}.png'), nrow=4)
-                    torchvision.utils.save_image(fake_clean * 0.5 + 0.5, os.path.join(config.sample_dir, f'sample_epoch_{epoch+1}.png'), nrow=4, padding=2, normalize=False)
-                    break
+            for batch in val_loader:
+                real_broken = batch['broken'].to(config.device)
+                real_clean  = batch['clean'].to(config.device)
+                fake_clean = generator(real_broken)
+                loss_g_gan = criterion_gan(discriminator(real_broken, fake_clean),
+                                            torch.ones_like(discriminator(real_broken, fake_clean)))
+                loss_g_l1  = criterion_l1(fake_clean, real_clean) * config.lambda_l1
+                val_loss_g += (loss_g_gan + loss_g_l1).item()
+        val_loss_g /= len(val_loader)
+        print(f'Validation Generator Loss: {val_loss_g:.4f}')
+        generator.train()
 
-print('Training complete! Checkpoints in', config.checkpoint_dir)
+        # Save regular checkpoints
+        if (epoch + 1) % 10 == 0:
+            torch.save({
+                'epoch': epoch + 1,
+                'generator': generator.state_dict(),
+                'discriminator': discriminator.state_dict(),
+            }, os.path.join(config.checkpoint_dir, f'pix2pix_epoch_{epoch+1}.pth'))
 
-# Step 6: Inference Function (for full image restoration)
-def restore_image(broken_path, model_path, output_path):
-    generator.load_state_dict(torch.load(model_path)['generator'])
-    generator.eval()
-    broken_img = Image.open(broken_path).convert('RGB')
-    w, h = broken_img.size
-    transform_inf = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
-    # Patch-wise restoration (simple overlap; improve with blending)
-    restored_patches = []
-    step = config.img_size // 2  # Overlap for stitching
-    for top in range(0, h - config.img_size + 1, step):
-        for left in range(0, w - config.img_size + 1, step):
-            patch = broken_img.crop((left, top, left + config.img_size, top + config.img_size))
-            patch_t = transform_inf(patch).unsqueeze(0).to(config.device)
+            # Save sample images
             with torch.no_grad():
-                restored_patch_t = generator(patch_t)
-            restored_patch = transforms.ToPILImage()(restored_patch_t.squeeze(0) * 0.5 + 0.5)
-            restored_patches.append((restored_patch, left, top))
-    
-    # Stitch (basic; use OpenCV for advanced)
-    restored = Image.new('RGB', (w, h), (255, 255, 255))
-    for patch, l, t in restored_patches:
-        restored.paste(patch, (l, t))
-    restored.save(output_path)
-    print(f'Restored image saved to {output_path}')
+                batch = next(iter(val_loader))
+                fake = generator(batch['broken'].to(config.device))
+                torchvision.utils.save_image(fake * 0.5 + 0.5,
+                    os.path.join(config.sample_dir, f'sample_epoch_{epoch+1}.png'),
+                    nrow=4, padding=2)
 
-# Example usage: restore_image('data/broken/test_img.png', 'checkpoints/pix2pix_epoch_200.pth', 'restored.png')
+        # Early stopping + best model saving with epoch info
+        if val_loss_g < best_val_loss:
+            best_val_loss = val_loss_g
+            best_epoch = epoch + 1
+            wait = 0
+
+            # Create meaningful filename
+            safe_loss = f"{best_val_loss:.4f}".replace('.', '_')  # avoid dots in filename
+            new_best_path = os.path.join(
+                config.checkpoint_dir,
+                f"BEST_generator_epoch{best_epoch:03d}_loss{safe_loss}.pth"
+            )
+
+            # Remove old best model if exists (optional, keeps folder clean)
+            if os.path.exists(best_model_path) and best_model_path != new_best_path:
+                try:
+                    os.remove(best_model_path)
+                except:
+                    pass
+
+            # Save new best
+            torch.save({
+                'epoch': best_epoch,
+                'generator_state_dict': generator.state_dict(),
+                'val_loss': best_val_loss,
+                'discriminator_state_dict': discriminator.state_dict(),  # optional
+            }, new_best_path)
+
+            best_model_path = new_best_path  # update reference
+            print(f"NEW BEST MODEL! → {os.path.basename(best_model_path)}")
+
+        else:
+            wait += 1
+            print(f"No improvement ({wait}/{patience} epochs)")
+
+            if wait >= patience:
+                print(f"\nEARLY STOPPING at epoch {epoch+1}")
+                print(f"Best model was at epoch {best_epoch} with val loss {best_val_loss:.4f}")
+                print(f"Saved as: {os.path.basename(best_model_path)}")
+                break
+
+    print("Training finished!")
