@@ -42,36 +42,52 @@ class DocumentDataset(Dataset):
         self.broken_dir = broken_dir
         self.clean_dir = clean_dir
         self.transform = transform
-        # Assume images are paired by filename (e.g., img001.png in both)
-        self.files = sorted([f for f in os.listdir(broken_dir) if f.endswith(('.png', '.jpg'))])
+        
+        # Get all broken files
+        self.broken_files = sorted([f for f in os.listdir(broken_dir) 
+                                  if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
+        
+        # Build a map: broken_filename → clean_filename
+        self.name_map = {}
+        for broken_name in self.broken_files:
+            # Extract base name: img0000533_thr80.jpg → img0000533
+            base = broken_name.split('_thr')[0]  # works for _thr80, _thr90, etc.
+            # Try common extensions
+            for ext in ['.jpg', '.jpeg', '.png']:
+                clean_candidate = base + ext
+                if os.path.exists(os.path.join(clean_dir, clean_candidate)):
+                    self.name_map[broken_name] = clean_candidate
+                    break
+            else:
+                print(f"Warning: No clean pair found for {broken_name}")
 
     def __len__(self):
-        return len(self.files)
+        return len(self.broken_files)
 
     def __getitem__(self, idx):
-        fname = self.files[idx]
-        broken_path = os.path.join(self.broken_dir, fname)
-        clean_path = os.path.join(self.clean_dir, fname)
+        broken_name = self.broken_files[idx]
+        clean_name = self.name_map[broken_name]
         
-        # Load full images
+        broken_path = os.path.join(self.broken_dir, broken_name)
+        clean_path = os.path.join(self.clean_dir, clean_name)
+        
         broken_img = Image.open(broken_path).convert('RGB')
         clean_img = Image.open(clean_path).convert('RGB')
         
-        # Crop random patch to handle large images (focus on text regions)
+        # Random crop same patch from both
         w, h = broken_img.size
-        crop_w, crop_h = config.img_size, config.img_size
-        left = np.random.randint(0, w - crop_w + 1)
-        top = np.random.randint(0, h - crop_h + 1)
-        broken_patch = broken_img.crop((left, top, left + crop_w, top + crop_h))
-        clean_patch = clean_img.crop((left, top, left + crop_w, top + crop_h))
+        left = np.random.randint(0, w - config.img_size + 1)
+        top = np.random.randint(0, h - config.img_size + 1)
+        box = (left, top, left + config.img_size, top + config.img_size)
+        
+        broken_patch = broken_img.crop(box)
+        clean_patch = clean_img.crop(box)
         
         if self.transform:
             broken_patch = self.transform(broken_patch)
             clean_patch = self.transform(clean_patch)
         
-        # Concat broken and clean horizontally for input (shape: [C, H, 2W] but we'll split in model)
-        input_patch = torch.cat([broken_patch, clean_patch], dim=2)  # [3, 256, 512]
-        return {'input': input_patch, 'target': clean_patch}
+        return {'broken': broken_patch, 'clean': clean_patch}  # simpler names
 
 # Transforms: Normalize to [-1, 1] for GAN stability
 transform = transforms.Compose([
@@ -229,8 +245,8 @@ def train_epoch():
     total_loss_d = 0
     
     for batch in tqdm(train_loader, desc='Train'):
-        real_broken = batch['input'][:, :, :, :config.img_size].to(config.device)  # [B, 3, 256, 256]
-        real_clean = batch['target'].to(config.device)  # [B, 3, 256, 256]
+        real_broken = batch['broken'].to(config.device)
+        real_clean = batch['clean'].to(config.device)
         
         # Train Discriminator
         optimizer_d.zero_grad()
