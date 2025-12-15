@@ -22,13 +22,13 @@ class Config:
     lambda_l1 = 100  # Weight for L1 reconstruction loss
     num_epochs = 200
 
-    # 4th_train.pth
-    img_size = 256  # Patch size for training (handles large 1900x5300 images)
-    batch_size = 24 to 32 # Handles more data for stable gradients/smoother losses. Test VRAM; reduce if OOM.
-    lr = 0.00015 # Slightly slower learning prevents early overfitting with volume.
-    beta1 = 0.5  # Adam beta1 for GAN stability
-    lambda_l1 = 100  # Weight for L1 reconstruction loss
-    num_epochs = 150 # Faster convergence; rely on early stopping.
+    # # 4th_train.pth
+    # img_size = 256  # Patch size for training (handles large 1900x5300 images)
+    # batch_size = 24 to 32 # Handles more data for stable gradients/smoother losses. Test VRAM; reduce if OOM.
+    # lr = 0.00015 # Slightly slower learning prevents early overfitting with volume.
+    # beta1 = 0.5  # Adam beta1 for GAN stability
+    # lambda_l1 = 100  # Weight for L1 reconstruction loss
+    # num_epochs = 150 # Faster convergence; rely on early stopping.
 
     data_dir = '../data'  # Root folder with 'broken/' and 'clean/' subdirs
     checkpoint_dir = '../checkpoints'
@@ -107,23 +107,6 @@ transform = transforms.Compose([
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
-# # Load datasets (80/20 train/val split; adjust as needed)
-# all_files = sorted(os.listdir(os.path.join(config.data_dir, 'broken')))
-# split_idx = int(0.8 * len(all_files))
-# train_dataset = DocumentDataset(
-#     os.path.join(config.data_dir, 'broken'),
-#     os.path.join(config.data_dir, 'clean'),
-#     transform=transform
-# )[:split_idx]  # Manual split; use torch.utils.data.Subset for proper indexing
-# val_dataset = DocumentDataset(
-#     os.path.join(config.data_dir, 'broken'),
-#     os.path.join(config.data_dir, 'clean'),
-#     transform=transform
-# )[split_idx:]
-
-# train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, num_workers=4)
-# val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4)
-
 # Load datasets (80/20 train/val split; adjust as needed)
 full_dataset = DocumentDataset(
     config.broken_dir,
@@ -136,7 +119,7 @@ val_size = len(full_dataset) - train_size
 train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
 
 train_loader = DataLoader(train_dataset, batch_size=config.batch_size,
-                          shuffle=True, num_workers=4, pin_memory=True)
+                          shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
 val_loader   = DataLoader(val_dataset,   batch_size=config.batch_size,
                           shuffle=False, num_workers=4, pin_memory=True)
 
