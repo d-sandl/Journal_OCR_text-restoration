@@ -6,6 +6,8 @@
 # Exit immediately if a command fails
 set -e
 
+PROJ_PATH=/Journal_OCR_text-restoration
+
 # Check number of arguments
 if [ "$#" -lt 1 ]; then
     echo "Usage: $0 <dataset-preparing/train/dataset_name>
@@ -14,11 +16,11 @@ if [ "$#" -lt 1 ]; then
 fi
 
 # Path to your virtual environment
-BROKEN_SRC_PATH=~/text-restoration/dataset-preparing/train/$1/broken
-CLEAN_SRC_PATH=~/text-restoration/dataset-preparing/train/$1/clean
+BROKEN_SRC_PATH=$PROJ_PATH/dataset-preparing/train/$1/broken
+CLEAN_SRC_PATH=$PROJ_PATH/dataset-preparing/train/$1/clean
 
-BROKEN_TGT_PATH=~/text-restoration/data/broken
-CLEAN_TGT_PATH=~/text-restoration/data/clean
+BROKEN_TGT_PATH=$PROJ_PATH/data/broken
+CLEAN_TGT_PATH=$PROJ_PATH/data/clean
 
 # Ask user before clearing
 read -p "Do you want to clear target (data) folders first? (y/n): " ans

@@ -7,13 +7,13 @@
 set -e
 
 # Path to your virtual environment
-PROJ_PATH=~/text-restoration
+PROJ_PATH=/Journal_OCR_text-restoration
 
 # Activate venv
 source $PROJ_PATH/venv/bin/activate
 
 # Run the Python script
-python ~/text-restoration/dataset-preparing/synthetic.py $1
+python $PROJ_PATH/dataset-preparing/synthetic.py $1
 
 # Deactivate venv
 deactivate

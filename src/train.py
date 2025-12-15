@@ -14,12 +14,22 @@ import argparse
 # Step 1: Define hyperparameters
 class Config:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # 1st_train.pth, 2nd_train.pth, 3rd_train.pth
     img_size = 256  # Patch size for training (handles large 1900x5300 images)
-    batch_size = 16
-    lr = 0.0002
+    batch_size = 16 
+    lr = 0.0002 
     beta1 = 0.5  # Adam beta1 for GAN stability
     lambda_l1 = 100  # Weight for L1 reconstruction loss
     num_epochs = 200
+
+    # 4th_train.pth
+    img_size = 256  # Patch size for training (handles large 1900x5300 images)
+    batch_size = 24 to 32 # Handles more data for stable gradients/smoother losses. Test VRAM; reduce if OOM.
+    lr = 0.00015 # Slightly slower learning prevents early overfitting with volume.
+    beta1 = 0.5  # Adam beta1 for GAN stability
+    lambda_l1 = 100  # Weight for L1 reconstruction loss
+    num_epochs = 150 # Faster convergence; rely on early stopping.
+
     data_dir = '../data'  # Root folder with 'broken/' and 'clean/' subdirs
     checkpoint_dir = '../checkpoints'
     sample_dir = '../samples'  # For saving test outputs
@@ -142,9 +152,10 @@ class UNetGenerator(nn.Module):
                 nn.LeakyReLU(0.2, inplace=True)
             )
 
-        def up_block(in_c, out_c, dropout=False):
+        def up_block(in_c, out_c, dropout=False):   # since 3rd_train.pth
             layers = [
-                nn.ConvTranspose2d(in_c, out_c, 4, stride=2, padding=1, bias=False),
+                nn.Upsample(scale_factor=2, mode='nearest'),  # since 3rd_train.pth
+                nn.Conv2d(in_c, out_c, kernel_size=3, padding=1, bias=False),  # since 3rd_train.pth
                 nn.BatchNorm2d(out_c),
                 nn.ReLU(inplace=True)
             ]
@@ -172,7 +183,11 @@ class UNetGenerator(nn.Module):
         self.up6 = up_block(512, 128)
         self.up7 = up_block(256, 64)
 
-        self.final = nn.ConvTranspose2d(128, out_channels, 4, stride=2, padding=1)
+        self.final = nn.Sequential(     # since 3rd_train.pth
+            nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.Conv2d(128, out_channels, kernel_size=3, padding=1),
+            nn.Tanh()
+        )
         self.tanh = nn.Tanh()
 
     def forward(self, x):
