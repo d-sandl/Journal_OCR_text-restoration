@@ -1,3 +1,9 @@
+# training data
+data/broken/
+data/clean/
+dataset-preparing/train/
+checkpoints/
+
 # Virtual environment
 venv/
 

@@ -10,6 +10,7 @@ import itertools
 import numpy as np
 from tqdm import tqdm
 import argparse
+from datetime import datetime
 
 # Step 1: Define hyperparameters
 class Config:
@@ -287,6 +288,8 @@ if __name__ == "__main__":
 
     # 6. FINAL TRAINING LOOP WITH EARLY STOPPING
     for epoch in range(config.num_epochs):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S") # get current timestamp
+
         loss_g, loss_d = train_epoch()
         print(f'Epoch [{epoch+1}/{config.num_epochs}] Loss_G: {loss_g:.4f}, Loss_D: {loss_d:.4f}')
         
@@ -332,7 +335,7 @@ if __name__ == "__main__":
             safe_loss = f"{best_val_loss:.4f}".replace('.', '_')  # avoid dots in filename
             new_best_path = os.path.join(
                 config.checkpoint_dir,
-                f"BEST_generator_epoch{best_epoch:03d}_loss{safe_loss}.pth"
+                f"BEST_epoch{best_epoch:03d}_GLoss{safe_loss}_savetime{timestamp}.pth"
             )
 
             # Remove old best model if exists (optional, keeps folder clean)
@@ -341,13 +344,22 @@ if __name__ == "__main__":
                     os.remove(best_model_path)
                 except:
                     pass
+            
+            history = {
+                'train_loss': train_loss_list,   # e.g. [0.9, 0.7, 0.5, ...]
+                'val_loss': val_loss_list,       # e.g. [0.8, 0.6, 0.55, ...]
+                'metrics': metrics_dict          # optional: accuracy, F1, etc.
+            }
 
             # Save new best
             torch.save({
+                'generator': generator.state_dict(),
+                'discriminator': discriminator.state_dict(),  # optional
                 'epoch': best_epoch,
-                'generator_state_dict': generator.state_dict(),
                 'val_loss': best_val_loss,
-                'discriminator_state_dict': discriminator.state_dict(),  # optional
+                'config': config.__dict__,
+                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'history': history,
             }, new_best_path)
 
             best_model_path = new_best_path  # update reference
