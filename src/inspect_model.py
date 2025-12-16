@@ -1,6 +1,9 @@
 # inspect_best_model.py
 import torch
 import os
+# os.environ['TORCH_CPP_LOG_LEVEL'] = 'ERROR'  # ← Suppress NNPACK and other C++ warnings
+# import warnings
+# warnings.filterwarnings("ignore")  # ← Optional: ignore all warnings
 import sys
 import yaml  # for pretty printing dict
 

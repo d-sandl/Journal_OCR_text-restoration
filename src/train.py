@@ -15,17 +15,19 @@ from datetime import datetime
 # Step 1: Define hyperparameters
 class Config:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # 1st_train.pth, 2nd_train.pth, 3rd_train.pth
+    # 1st, 2nd
     img_size = 256  # Patch size for training (handles large 1900x5300 images)
-    batch_size = 16 
-    lr = 0.0002 
+    batch_size = 16  # 1st, 2nd
+    batch_size = 24  # 1st, 2nd
+    # lr = 0.0002 # 1st, 2nd
+    lr = 0.00015 # 3rd
     beta1 = 0.5  # Adam beta1 for GAN stability
     lambda_l1 = 100  # Weight for L1 reconstruction loss
     num_epochs = 200
 
-    # # 4th_train.pth
+    # # 3rd
     # img_size = 256  # Patch size for training (handles large 1900x5300 images)
-    # batch_size = 24 to 32 # Handles more data for stable gradients/smoother losses. Test VRAM; reduce if OOM.
+    # batch_size = 24 # Handles more data for stable gradients/smoother losses. Test VRAM; reduce if OOM.
     # lr = 0.00015 # Slightly slower learning prevents early overfitting with volume.
     # beta1 = 0.5  # Adam beta1 for GAN stability
     # lambda_l1 = 100  # Weight for L1 reconstruction loss
@@ -108,21 +110,6 @@ transform = transforms.Compose([
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
-# Load datasets (80/20 train/val split; adjust as needed)
-full_dataset = DocumentDataset(
-    config.broken_dir,
-    config.clean_dir,
-    transform=transform
-)
-
-train_size = int(0.8 * len(full_dataset))
-val_size = len(full_dataset) - train_size
-train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
-
-train_loader = DataLoader(train_dataset, batch_size=config.batch_size,
-                          shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
-val_loader   = DataLoader(val_dataset,   batch_size=config.batch_size,
-                          shuffle=False, num_workers=4, pin_memory=True)
 
 # Step 3: Generator - U-Net architecture for broken -> clean mapping
 class UNetGenerator(nn.Module):
@@ -136,10 +123,11 @@ class UNetGenerator(nn.Module):
                 nn.LeakyReLU(0.2, inplace=True)
             )
 
-        def up_block(in_c, out_c, dropout=False):   # since 3rd_train.pth
+        def up_block(in_c, out_c, dropout=False):   # 2nd
             layers = [
-                nn.Upsample(scale_factor=2, mode='nearest'),  # since 3rd_train.pth
-                nn.Conv2d(in_c, out_c, kernel_size=3, padding=1, bias=False),  # since 3rd_train.pth
+                nn.Upsample(scale_factor=2, mode='nearest'),  # 2nd
+                # nn.Conv2d(in_c, out_c, kernel_size=3, padding=1, bias=False),  # 2nd
+                nn.Conv2d(in_c, out_c, kernel_size=5, padding=2, bias=False),  # 3rd
                 nn.BatchNorm2d(out_c),
                 nn.ReLU(inplace=True)
             ]
@@ -167,12 +155,12 @@ class UNetGenerator(nn.Module):
         self.up6 = up_block(512, 128)
         self.up7 = up_block(256, 64)
 
-        self.final = nn.Sequential(     # since 3rd_train.pth
+        self.final = nn.Sequential(     # since 2nd
             nn.Upsample(scale_factor=2, mode='nearest'),
-            nn.Conv2d(128, out_channels, kernel_size=3, padding=1),
+            # nn.Conv2d(128, out_channels, kernel_size=3, padding=1),     # 1st, 2nd
+            nn.Conv2d(128, out_channels, kernel_size=5, padding=2),     # 3rd
             nn.Tanh()
-        )
-        self.tanh = nn.Tanh()
+        )             
 
     def forward(self, x):
         # Encoder
@@ -195,7 +183,7 @@ class UNetGenerator(nn.Module):
         u7 = self.up7(torch.cat([u6, d2], dim=1))
 
         out = self.final(torch.cat([u7, d1], dim=1))
-        return self.tanh(out)
+        return out
 
 # Step 4: Discriminator - PatchGAN (70x70 receptive field)
 class PatchGANDiscriminator(nn.Module):
@@ -228,6 +216,22 @@ class PatchGANDiscriminator(nn.Module):
 
 # ==================== MAIN TRAINING LOOP ====================
 if __name__ == "__main__":
+    # Load datasets only when training (80/20 train/val split; adjust as needed)
+    full_dataset = DocumentDataset(
+        config.broken_dir,
+        config.clean_dir,
+        transform=transform
+    )
+
+    train_size = int(0.8 * len(full_dataset))
+    val_size = len(full_dataset) - train_size
+    train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+
+    train_loader = DataLoader(train_dataset, batch_size=config.batch_size,
+                            shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
+    val_loader   = DataLoader(val_dataset,   batch_size=config.batch_size,
+                            shuffle=False, num_workers=4, pin_memory=True)
+
     # 1. Instantiate models
     generator = UNetGenerator().to(config.device)
     discriminator = PatchGANDiscriminator().to(config.device)

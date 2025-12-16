@@ -2,11 +2,16 @@
 # how to use:
 # python inference.py pix2pix_epoch_190_1st-train.pth
 # Example: python inference.py pix2pix_epoch_190_1st-train.pth
+
+import os
+os.environ['TORCH_CPP_LOG_LEVEL'] = 'ERROR'  # ← Suppress NNPACK and other C++ warnings
+import warnings
+warnings.filterwarnings("ignore")  # ← Optional: ignore all warnings
 import torch
+
+import shutil
 from torchvision import transforms
 from PIL import Image
-import os
-import shutil
 import sys
 from datetime import datetime
 from train import UNetGenerator, Config
