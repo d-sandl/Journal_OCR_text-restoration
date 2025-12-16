@@ -10,7 +10,7 @@ if __name__ == '__main__':
     else:
         print("Usage: python inspect.py <model_filename>")
         print("Example: python inspect.py BEST_generator_epoch019_loss26_0810.pth")
-        return
+        sys.exit(1)
 
     # ------------------ CONFIGURE HERE ------------------
     checkpoint_dir = '../checkpoints'

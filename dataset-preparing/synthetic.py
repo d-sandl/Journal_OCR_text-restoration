@@ -10,15 +10,15 @@ import sys
 def main():
     
     timestamp = datetime.now().strftime("%Y%m%d")
-    indir = sys.argv[1]   # folder with clean originals
+    indir = f"./raw/{sys.argv[1]}"   # folder with clean originals
     indir_basename = os.path.basename(indir)
     out_clean_dir = f"./train/{indir_basename}/clean/"
     out_broken_dir = f"./train/{indir_basename}/broken/"
 
-    # # remove existing output directories if they exist
-    # print(f"Removing existing output directories:\n{out_clean_dir}\n{out_broken_dir}")
-    # shutil.rmtree(out_clean_dir, ignore_errors=True)
-    # shutil.rmtree(out_broken_dir, ignore_errors=True)
+    # remove existing output directories if they exist
+    print(f"Removing existing output directories:\n{out_clean_dir}\n{out_broken_dir}")
+    shutil.rmtree(out_clean_dir, ignore_errors=True)
+    shutil.rmtree(out_broken_dir, ignore_errors=True)
 
     # Create output directories
     os.makedirs(out_clean_dir, exist_ok=True)
