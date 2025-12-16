@@ -56,20 +56,6 @@ if __name__ == '__main__':
             print("No config saved in this checkpoint.")
         print("-"*50)
 
-        # History
-        history = checkpoint.get('history', None)
-        if history:
-            print("TRAINING HISTORY:")
-            train_loss = history.get('train_loss', [])
-            val_loss_list = history.get('val_loss', [])
-            metrics = history.get('metrics', {})
-            print(f"  Train Losses : {train_loss}")
-            print(f"  Val Losses   : {val_loss_list}")
-            print(f"  Metrics      : {yaml.dump(metrics, default_flow_style=False, sort_keys=False)}")
-        else:
-            print("No history saved in this checkpoint.")
-        print("-"*50)
-
-        print("Model loaded successfully!")
-        print("You can now use checkpoint['generator'] to load into your generator, e.g.:")
-        print("    generator.load_state_dict(checkpoint['generator'])")
+        # print("Model loaded successfully!")
+        # print("You can now use checkpoint['generator'] to load into your generator, e.g.:")
+        # print("    generator.load_state_dict(checkpoint['generator'])")
