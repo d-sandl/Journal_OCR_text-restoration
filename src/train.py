@@ -331,38 +331,33 @@ if __name__ == "__main__":
             best_epoch = epoch + 1
             wait = 0
 
-            # Create meaningful filename
-            safe_loss = f"{best_val_loss:.4f}".replace('.', '_')  # avoid dots in filename
+            # Create meaningful filename with current time
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_loss = f"{best_val_loss:.4f}".replace('.', '_')
             new_best_path = os.path.join(
                 config.checkpoint_dir,
-                f"BEST_epoch{best_epoch:03d}_GLoss{safe_loss}_savetime{timestamp}.pth"
+                f"BEST_epoch{best_epoch:03d}_GLoss{safe_loss}_time{timestamp}.pth"
             )
 
-            # Remove old best model if exists (optional, keeps folder clean)
+            # Optional: remove previous best
             if os.path.exists(best_model_path) and best_model_path != new_best_path:
                 try:
                     os.remove(best_model_path)
+                    print(f"Removed old best: {os.path.basename(best_model_path)}")
                 except:
-                    pass
-            
-            history = {
-                'train_loss': train_loss_list,   # e.g. [0.9, 0.7, 0.5, ...]
-                'val_loss': val_loss_list,       # e.g. [0.8, 0.6, 0.55, ...]
-                'metrics': metrics_dict          # optional: accuracy, F1, etc.
-            }
+                    print(f"Warning: Could not remove old best model")
 
-            # Save new best
+            # Save new best (no undefined history)
             torch.save({
                 'generator': generator.state_dict(),
-                'discriminator': discriminator.state_dict(),  # optional
+                'discriminator': discriminator.state_dict(),
                 'epoch': best_epoch,
                 'val_loss': best_val_loss,
                 'config': config.__dict__,
                 'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'history': history,
             }, new_best_path)
 
-            best_model_path = new_best_path  # update reference
+            best_model_path = new_best_path
             print(f"NEW BEST MODEL! → {os.path.basename(best_model_path)}")
 
         else:
